@@ -1,91 +1,78 @@
-import React, { Component } from 'react';
-import { Notify } from 'notiflix/build/notiflix-notify-aio';
-
-import { SearchBar } from './SearchBar/SearchBar';
-import { ImageGallery } from './ImageGallery/ImageGallery';
-import { Button } from './Button/Button.js';
-
-import { fetchImages } from '../api';
-import { Loader } from './Loader/Loader';
-
+import toast, { Toaster } from 'react-hot-toast';
+import { SearchBar } from '../components/SearchBar/SearchBar.js';
+import { ImageGallery } from '../components/ImageGallery/ImageGallery.js';
+import { Button } from '../components/Button/Button.js';
+import { fetchImages } from '../api.js';
+import { Loader } from '../components/Loader/Loader.js';
 import { MainContainer } from './App.styled';
+import { useState, useEffect } from 'react';
 
-export class App extends Component {
-  state = {
-    query: '',
-    images: [],
-    page: 1,
-    loading: false,
-    noResults: false,
-    totalPages: 0,
+export const App = () => {
+  const [query, setQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [totalPages, setTotalPages] = useState(0);
+
+  const changeQuery = newQuery => {
+    if (newQuery === query) {
+      return toast.error('Please, enter search params');
+    }
+    setQuery(`${Date.now()}/${newQuery}`);
+    setImages([]);
+    setPage(1);
   };
 
-  changeQuery = newQuery => {
-    if (newQuery === this.state.query) {
-      return Notify.failure('Please, enter search params');
+  useEffect(() => {
+    if (query === '') {
+      return;
     }
 
-    this.setState({
-      query: `${Date.now()}/${newQuery}`,
-      images: [],
-      page: 1,
-    });
-  };
-
-  async componentDidUpdate(prevProps, prevState) {
-    const prevQuery = prevState.query;
-    const newQuery = this.state.query;
-
-    if (prevQuery !== newQuery || prevState.page !== this.state.page) {
-      const normalizedQuery = newQuery.slice(newQuery.indexOf('/') + 1);
-
-      this.setState({ loading: true });
-
+    async function getImages() {
+      const normalizedQuery = query.slice(query.indexOf('/') + 1);
       try {
-        const images = await fetchImages(normalizedQuery, this.state.page);
+        setLoading(true);
+        const receivedImages = await fetchImages(normalizedQuery, page);
 
-        if (images.hits.length === 0) {
-          Notify.failure(
+        if (receivedImages.hits.length === 0) {
+          toast.error(
             'No images have been found according to your request. Please, try again!'
           );
-          this.setState({
-            loading: false,
-          });
+          setLoading(false);
         }
-        this.setState(prevState => ({
-          images: [...prevState.images, ...images.hits],
-          loading: false,
-          totalPages: Math.ceil(images.totalHits / 12),
-        }));
+
+        setImages(prevState => [...prevState, ...receivedImages.hits]);
+        setLoading(false);
+        setTotalPages(receivedImages.totalHits);
       } catch (error) {
         console.log(error);
-        this.setState({ loading: false });
       }
     }
-  }
+    getImages();
+  }, [query, page, images.totalHits]);
 
-  handleLoadMore = () => {
-    this.setState(prevState => ({ page: prevState.page + 1 }));
-    this.setState({ loading: true });
+  const handleLoadMore = () => {
+    setPage(prevState => prevState + 1);
+    setLoading(true);
   };
 
-  render() {
-    const { images, loading, page, totalPages } = this.state;
-    return (
-      <MainContainer>
-        <div>
-          <SearchBar onSubmit={this.changeQuery} />
-        </div>
-        <div>
-          <ImageGallery images={images} />
-        </div>
-        {loading && <Loader />}
-        <div>
-          {images.length !== 0 && totalPages !== page && (
-            <Button onClick={this.handleLoadMore} />
-          )}
-        </div>
-      </MainContainer>
-    );
-  }
-}
+  console.log(totalPages);
+
+  return (
+    <MainContainer>
+      <Toaster position="top-right" reverseOrder={false} />
+      <div>
+        <SearchBar onSubmit={changeQuery} />
+      </div>
+      <div>
+        <ImageGallery images={images} />
+      </div>
+      {loading && <Loader />}
+      <div>
+        {images.length !== 0 && totalPages !== images.length && (
+          <Button onClick={handleLoadMore} />
+        )}
+      </div>
+    </MainContainer>
+  );
+};
